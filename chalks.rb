@@ -21,97 +21,42 @@ class Chalk
     @file = File.new(file)
     @rnd = Random.new(file.hash)
     @tokens = {}
+    reset
   end
 
-  def parse
+  def parse &block
+    reset()
 
-    state = :source
-    string_started_with = ''
-    entity = ''
-    last_couple = ''
-
-    @file.rewind
     @file.read.each_char do |char|
-      if last_couple.size < 2
-        last_couple += char
-      else
-        last_couple = "#{last_couple[1]}#{char}"
-      end
+      @last_couple = ((@last_couple.size < 2) ? @last_couple : @last_couple[1]) + char
 
-      case(state)
+      case(@state)
         when :source
-          if start_comment?(last_couple)
-            state = :comment
+          if start_comment?(@last_couple)
+            @state = :comment
           elsif STRING_SEP.include?(char)
-              string_started_with = char
-              state = :string
+              @string_started_with = char
+              @state = :string
           else
-            if(entity.length == 1 && SEPARATORS.index(entity))
-              yield entity, state if block_given?
-              entity.clear
-            end
-            if(SEPARATORS.index(char))
-              yield entity, state if block_given?
-              entity.clear
-            end
+            process_entity(&block) if (@entity.length == 1 && SEPARATORS.index(@entity))  || SEPARATORS.index(char)
           end
 
         when :comment
-          if end_comment?(last_couple)
-            yield entity, state if block_given?
-            state = :source
-            entity.clear
-          end
+          process_entity(:source, &block) if end_comment?(@last_couple)
+
         when :string
-          if (STRING_SEP.include?(char) && string_started_with == char)
-            entity += char
-            yield entity, state if block_given?
-            state = :source
+          if (STRING_SEP.include?(char) && @string_started_with == char)
+            @entity += char
+            process_entity(:source, &block)
             char = ''
-            entity.clear
           elsif char == '\\'
-            state = :escaped_char
+            @state = :escaped_char
           else
           end
         when :escaped_char
-          state = :string
+          @state = :string
       end
-      entity += char
-    end
-  end
-
-  def color(entity)
-    entity = entity.strip
-
-    entity.gsub! SEPARATORS_RX, ''
-
-    token = ''
-    return token if entity.empty?
-    return token if token = @tokens[entity]
-
-    return '' if entity[0].ord >= 128
-
-    rgb = [ @rnd.rand(150) + 100, @rnd.rand(150) + 100, @rnd.rand(150) + 100 ]
-
-    token = "#%02X%02X%02X" % rgb
-    @tokens[entity] = token
-    return token
-  end
-
-  def highlight(entity, type)
-    esc_entity = CGI.escapeHTML( entity )
-    case type
-      when :string, :comment
-        "<span class='#{type}'>#{esc_entity}</span>"
-      else
-
-        rgb = color(entity)
-        if rgb.empty?
-          esc_entity
-        else
-          "<span rel='t#{rgb.hash}' style='color: #{rgb}' >#{esc_entity}</span>"
-        end
-
+      @entity += char
     end
   end
 
@@ -153,6 +98,58 @@ body { background-color:#000; color:#BAB; background: linear-gradient(90deg, #03
     end
   end
 
+  private
+
+
+  def process_entity(new_state = nil, &block)
+    block.call @entity, @state if block
+    @entity.clear
+    @state = new_state if new_state
+  end
+
+  def reset
+    @file.rewind if @file
+    @state = :source
+    @string_started_with = ''
+    @entity = ''
+    @last_couple = ''
+  end
+
+  def color(entity)
+    entity = entity.strip
+
+    entity.gsub! SEPARATORS_RX, ''
+
+    token = ''
+    return token if entity.empty?
+    return token if token = @tokens[entity]
+
+    return '' if entity[0].ord >= 128
+
+    rgb = [ @rnd.rand(150) + 100, @rnd.rand(150) + 100, @rnd.rand(150) + 100 ]
+
+    token = "#%02X%02X%02X" % rgb
+    @tokens[entity] = token
+    return token
+  end
+
+  def highlight(entity, type)
+    esc_entity = CGI.escapeHTML( entity )
+    case type
+      when :string, :comment
+        "<span class='#{type}'>#{esc_entity}</span>"
+      else
+
+        rgb = color(entity)
+        if rgb.empty?
+          esc_entity
+        else
+          "<span rel='t#{rgb.hash}' style='color: #{rgb}' >#{esc_entity}</span>"
+        end
+
+    end
+  end
+
   def start_comment?(char)
     rx = COMMENT_START_CHARS[language]
     char.match rx if rx
@@ -164,6 +161,10 @@ body { background-color:#000; color:#BAB; background: linear-gradient(90deg, #03
   end
 end
 
-ch = Chalk.new(ARGV[0])
+ch = Chalk.new(ARGV[0] || "tmp/src2.rb")
 File.open(ARGV[1] || "out.html", 'w').write ch.to_html
+
+#ch.parse do |e, t|
+#  print e
+#end
 
