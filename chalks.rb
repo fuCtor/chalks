@@ -1,6 +1,6 @@
 require 'cgi'
 
-class Chulk
+class Chalk
 
   COMMENT_START_CHARS = {
       ruby: /#./,
@@ -164,6 +164,6 @@ body { background-color:#000; color:#BAB; background: linear-gradient(90deg, #03
   end
 end
 
-ch = Chulk.new('tmp/src1.cpp')
+ch = Chalk.new('tmp/src1.cpp')
 File.open("out.html", 'w').write ch.to_html
 
