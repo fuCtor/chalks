@@ -164,6 +164,6 @@ body { background-color:#000; color:#BAB; background: linear-gradient(90deg, #03
   end
 end
 
-ch = Chalk.new('tmp/src1.cpp')
-File.open("out.html", 'w').write ch.to_html
+ch = Chalk.new(ARGV[0])
+File.open(ARGV[1] || "out.html", 'w').write ch.to_html
 
